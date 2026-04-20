@@ -219,7 +219,17 @@
   </div>
 
   <script>
-    let todos = JSON.parse(localStorage.getItem('todos') || '[]');
+    const SUPABASE_URL = 'https://zkqdlyyjgmqzjyzvmyms.supabase.co';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InprcWRseXlqZ21xemp5enZteW1zIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2OTg2MTIsImV4cCI6MjA5MjI3NDYxMn0.MzNa_nrS33-74YVzXh_AKQa8fQ0VHV9iAV4q9dHnGdQ';
+
+    const headers = {
+      'apikey': SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation'
+    };
+
+    let todos = [];
     let filter = 'all';
 
     document.getElementById('date').textContent = new Date().toLocaleDateString('tr-TR', {
@@ -230,35 +240,58 @@
       if (e.key === 'Enter') addTodo();
     });
 
-    function save() {
-      localStorage.setItem('todos', JSON.stringify(todos));
+    async function fetchTodos() {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/todos?order=created_at.desc`, { headers });
+      todos = await res.json();
+      render();
     }
 
-    function addTodo() {
+    async function addTodo() {
       const input = document.getElementById('todoInput');
       const text = input.value.trim();
       if (!text) return;
-      todos.unshift({ id: Date.now(), text, done: false });
       input.value = '';
-      save();
+      input.disabled = true;
+
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/todos`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ text, done: false })
+      });
+      const [newTodo] = await res.json();
+      todos.unshift(newTodo);
+      input.disabled = false;
+      input.focus();
       render();
     }
 
-    function toggleTodo(id) {
-      todos = todos.map(t => t.id === id ? { ...t, done: !t.done } : t);
-      save();
+    async function toggleTodo(id) {
+      const todo = todos.find(t => t.id === id);
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/todos?id=eq.${id}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ done: !todo.done })
+      });
+      const [updated] = await res.json();
+      todos = todos.map(t => t.id === id ? updated : t);
       render();
     }
 
-    function deleteTodo(id) {
+    async function deleteTodo(id) {
+      await fetch(`${SUPABASE_URL}/rest/v1/todos?id=eq.${id}`, {
+        method: 'DELETE',
+        headers
+      });
       todos = todos.filter(t => t.id !== id);
-      save();
       render();
     }
 
-    function clearDone() {
+    async function clearDone() {
+      await fetch(`${SUPABASE_URL}/rest/v1/todos?done=eq.true`, {
+        method: 'DELETE',
+        headers
+      });
       todos = todos.filter(t => !t.done);
-      save();
       render();
     }
 
@@ -273,8 +306,7 @@
       const list = document.getElementById('todoList');
       const active = todos.filter(t => !t.done).length;
 
-      document.getElementById('remaining').textContent =
-        `${active} görev kaldı`;
+      document.getElementById('remaining').textContent = `${active} görev kaldı`;
 
       const visible = todos.filter(t => {
         if (filter === 'active') return !t.done;
@@ -300,7 +332,7 @@
       return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
-    render();
+    fetchTodos();
   </script>
 </body>
 </html>
